@@ -1,55 +1,55 @@
+import copy
 import tree
 import math
+import classifier
+from random import randint
 
 class ID3DecisionTree():
     
-    def __init__(self):
-        # self.depth = 0
+    def __init__(self, givenHeuristic):
         self.root = tree.Node()
+        self.heuristic = givenHeuristic
 
-    def generate(self, data):
-        
-        #First row are class attributes except last element
-        attributes = list(data[0][:-1])
-        data.remove(data[0])
+    def generate(self, node, attributes):
+         
+        node.negativeInstances = self.getInstances(node.allNodeInstances,'0')
+        node.positiveInstances = self.getInstances(node.allNodeInstances,'1')
+        entropy = self.getHeuristicValue(len(node.negativeInstances), len(node.positiveInstances))
+        if entropy == 0:
+            node.isLeaf = True
+            node.attribute = '0' if node.negativeInstances else '1' #Assign either 0 or 1
+            return
+        elif not attributes: #Check if no attributes are left to split tree
+            node.isLeaf = True
+            node.attribute = '0' if len(node.negativeInstances) > len(node.positiveInstances) else '1'
+            return
+        else:
+            node.attribute = self.getNodeAttribute(node.allNodeInstances, entropy, attributes)
+            node.leftChild  = tree.Node()
+            node.rightChild = tree.Node()
+            node.leftChild.allNodeInstances = self.getAllNodeInstances(node.allNodeInstances, node.attribute, attributes,'0')
+            node.rightChild.allNodeInstances = self.getAllNodeInstances(node.allNodeInstances, node.attribute, attributes,'1')
 
-        self.root.allNodeInstances = data        
-        nodeQueue = [self.root]
-        while nodeQueue:
-            node = nodeQueue.pop(0) 
-            node.negativeInstances = self.getInstances(node.allNodeInstances,'0')
-            node.positiveInstances = self.getInstances(node.allNodeInstances,'1')
-            entropy = self.getEntropy(len(node.negativeInstances), len(node.positiveInstances))
-            if entropy == 0:
+            #left subtree check
+            if len(node.leftChild.allNodeInstances) == 0:
+                node.leftChild = None
+                node.rightChild = None
+                node.attribute = '1'
                 node.isLeaf = True
-                node.attribute = '0' if node.negativeInstances else '1' #Assign either 0 or 1
-            elif not attributes: #no attributes left to split tree
+                return
+
+            #right subtree check
+            if len(node.rightChild.allNodeInstances) == 0:
+                node.leftChild = None
+                node.rightChild = None
+                node.attribute = '0'
                 node.isLeaf = True
-                node.attribute = '0' if len(node.negativeInstances) > len(node.positiveInstances) else '1'
-            else:
-                node.attribute = self.getNodeAttribute(node.allNodeInstances, entropy, attributes)
-                node.leftChild  = tree.Node()
-                node.rightChild = tree.Node()
-                node.leftChild.allNodeInstances = self.getAllNodeInstances(node.allNodeInstances, node.attribute, attributes,'0')
-                node.rightChild.allNodeInstances = self.getAllNodeInstances(node.allNodeInstances, node.attribute, attributes,'1')
-                nodeQueue.append(node.leftChild)
-                nodeQueue.append(node.rightChild)
+                return
+            
+            #Recursive calls for left and right subtrees
+            self.generate(node.leftChild, attributes)
+            self.generate(node.rightChild, attributes)
 
-                #left subtree node addition
-                if len(node.leftChild.allNodeInstances) == 0:
-                    node.leftChild.attribute = '0' if len(node.negativeInstances) > len(node.positiveInstances) else '1'
-                    node.leftChild.isLeaf = True
-                    nodeQueue.remove(node.leftChild)
-                
-                attributes.remove(node.attribute)
-                
-                #right subtree node addition
-                if len(node.rightChild.allNodeInstances) == 0:
-                    node.rightChild.attribute = '0' if len(node.negativeInstances) > len(node.positiveInstances) else '1'
-                    node.rightChild.isLeaf = True
-                    nodeQueue.remove(node.rightChild)
-
-    @classmethod
     def getAllNodeInstances(self, parentAllInstances, attribute, allAttributes,value):
         instancesCorrespondingToGivenValue = []
         attributeIndex = allAttributes.index(attribute)
@@ -58,31 +58,28 @@ class ID3DecisionTree():
                 instancesCorrespondingToGivenValue.append(inst)
         return instancesCorrespondingToGivenValue
 
-    @classmethod
     def getNodeAttribute(self, instances, entropy, attributes):
         gains = {}
         for attributeIndex, attribute in enumerate(attributes):
-            gain = self.getGainForAttribute(instances, entropy, attributeIndex)
-            gains[attribute] = gain
+            gains[attribute] = self.getGainForAttribute(instances, entropy, attributeIndex)
 
         maxGainAttribute = max(gains, key=gains.get)
         return maxGainAttribute
     
-    @classmethod
     def getGainForAttribute(self, instances, entropy, attributeIndex):
         attributeValueCollection = dict.fromkeys(['0','1'])
         attributeValueCollection['0'] = dict.fromkeys(['negativeCount', 'positiveCount'],0)
         attributeValueCollection['1'] = dict.fromkeys(['negativeCount', 'positiveCount'],0)
         for instance in instances:
             attributeValue = instance[attributeIndex]
-            classValue = instance[-1]
-            if classValue == '1':
+            targetAttributeValue = instance[-1]
+            if targetAttributeValue == '1':
                 attributeValueCollection[attributeValue]['positiveCount'] = attributeValueCollection[attributeValue]['positiveCount'] + 1
             else:
                 attributeValueCollection[attributeValue]['negativeCount'] = attributeValueCollection[attributeValue]['negativeCount'] + 1
-
-        zeroEntropy = self.getEntropy(attributeValueCollection['0']['negativeCount'],attributeValueCollection['0']['positiveCount'])
-        oneEntropy = self.getEntropy(attributeValueCollection['1']['negativeCount'],attributeValueCollection['1']['positiveCount'])
+        
+        zeroEntropy = self.getHeuristicValue(attributeValueCollection['0']['negativeCount'],attributeValueCollection['0']['positiveCount'])
+        oneEntropy = self.getHeuristicValue(attributeValueCollection['1']['negativeCount'],attributeValueCollection['1']['positiveCount'])
         totalSamplesConsidered = len(instances)
         zeroSamples = attributeValueCollection['0']['negativeCount'] + attributeValueCollection['0']['positiveCount']
         oneSamples = attributeValueCollection['1']['negativeCount'] + attributeValueCollection['1']['positiveCount']
@@ -91,15 +88,20 @@ class ID3DecisionTree():
         gain = entropy - expectedEntropy
         return gain
 
-    @classmethod
     def getInstances(self, data, instanceType):
         instances = []
         for instance in data:
             if instance[-1] == instanceType: #class matches instanceType
                 instances.append(instance)
         return instances
-    
-    @classmethod
+
+    def getHeuristicValue(self, negativeSamplesCount, positiveSamplesCount):
+
+        if self.heuristic == "infogain":
+            return self.getEntropy(negativeSamplesCount, positiveSamplesCount)
+        else:
+            return self.getVarianceImpurity(negativeSamplesCount, positiveSamplesCount)
+
     def getEntropy(self, negativeSamplesCount, positiveSamplesCount):
         totalCount = negativeSamplesCount + positiveSamplesCount
         if totalCount == 0:
@@ -108,137 +110,12 @@ class ID3DecisionTree():
         pPlus = positiveSamplesCount/float(totalCount)
         
         if pMinus == 0:
-            entropy = -(pPlus) * math.log(pPlus,2)
-        elif pPlus == 0:
-            entropy = -(pMinus) * math.log(pMinus,2)
-        else:
-            entropy = -(pMinus) * math.log(pMinus,2) - (pPlus) * math.log(pPlus,2)
-        return entropy  
-
-    def inorder(self, node, depth):
-        if node is None:
-            return
-        if node.isLeaf:
-            print node.attribute
-        else:
-            print ""
-            formattingstring = ""
-            for i in range(depth):
-                formattingstring = formattingstring + "| " 
-            
-            value = "0" if node.rightChild is not None else "1"
-            print formattingstring + node.attribute + " = " + value + " : "
+            return -(pPlus) * math.log(pPlus,2)
+        if pPlus == 0:
+            return -(pMinus) * math.log(pMinus,2)
         
-        self.inorder(node.leftChild, depth + 1)
-        formattingstring = ""
-        if node.isLeaf == False:
-            for i in range(depth):
-                formattingstring = formattingstring + "| " 
-            
-            value = "0" if node.rightChild is not None else "1"
-            print formattingstring + node.attribute + " = " + value + " : "
-
-        self.inorder(node.rightChild, depth + 1)
-
-class ImpurityVarianceDecisionTree():
-
-    def __init__(self):
-        self.root = tree.Node()
-    
-    def generate(self, data):
-        self.root.allNodeInstances = data
-        
-        #First row are class attributes except last element
-        attributes = list(data[0][:-1])
-        
-        nodeQueue = [self.root]
-        while nodeQueue:
-            node = nodeQueue.pop(0) 
-            node.negativeInstances = self.getInstances(node.allNodeInstances,'0')
-            node.positiveInstances = self.getInstances(node.allNodeInstances,'1')
-            varianceImpurity = self.getVarianceImpurity(len(node.negativeInstances), len(node.positiveInstances))
-            if varianceImpurity == 0:
-                node.isLeaf = True
-                node.attribute = '1' if len(node.positiveInstances) != 0 else '0' #Assign either 0 or 1
-            elif not attributes: #no attributes left to split tree
-                node.isLeaf = True
-                node.attribute = '0' if len(node.negativeInstances) > len(node.positiveInstances) else '1'
-            else:
-                node.attribute = self.getNodeAttribute(node.allNodeInstances, varianceImpurity, attributes)
-                node.leftChild  = tree.Node()
-                node.rightChild = tree.Node()
-                node.leftChild.allNodeInstances = self.getAllNodeInstances(node.allNodeInstances, node.attribute, attributes,'0')
-                node.rightChild.allNodeInstances = self.getAllNodeInstances(node.allNodeInstances, node.attribute, attributes,'1')
-                nodeQueue.append(node.leftChild)
-                nodeQueue.append(node.rightChild)
-
-                #left subtree node addition
-                if len(node.leftChild.allNodeInstances) == 0:
-                    node.leftChild.attribute = '0' if len(node.negativeInstances) > len(node.positiveInstances) else '1'
-                    node.leftChild.isLeaf = True
-                
-                attributes.remove(node.attribute)
-                    # nodeQueue.append(node.leftChild)
-                
-                #right subtree node addition
-                if len(node.rightChild.allNodeInstances) == 0:
-                    node.rightChild.attribute = '0' if len(node.negativeInstances) > len(node.positiveInstances) else '1'
-                    node.rightChild.isLeaf = True
-                # else:
-                #     attributes.remove(node.attribute)
-                    # nodeQueue.append(node.rightChild)
-
-    @classmethod
-    def getAllNodeInstances(self, allInstances, attribute, allAttributes,value):
-        instancesCorrespondingToGivenValue = []
-        attributeIndex = allAttributes.index(attribute)
-        for inst in allInstances[1:]:
-            if inst[attributeIndex] == value:
-                instancesCorrespondingToGivenValue.append(inst)
-        return instancesCorrespondingToGivenValue
-
-    @classmethod
-    def getNodeAttribute(self, instances, varianceImpurity, attributes):
-        gains = {}
-        for attributeIndex, attribute in enumerate(attributes):
-            gain = self.getGainForAttribute(instances, varianceImpurity, attributeIndex)
-            gains[attribute] = gain
-
-        maxGainAttribute = max(gains, key=gains.get)
-        return maxGainAttribute
-    
-    @classmethod
-    def getGainForAttribute(self, instances, varianceImpurity, attributeIndex):
-        attributeValueCollection = dict.fromkeys(['0','1'])
-        attributeValueCollection['0'] = dict.fromkeys(['negativeCount', 'positiveCount'],0)
-        attributeValueCollection['1'] = dict.fromkeys(['negativeCount', 'positiveCount'],0)
-        for instance in instances[1:]:
-            attributeValue = instance[attributeIndex]
-            classValue = instance[-1]
-            if classValue == '1':
-                attributeValueCollection[attributeValue]['positiveCount'] = attributeValueCollection[attributeValue]['positiveCount'] + 1
-            else:
-                attributeValueCollection[attributeValue]['negativeCount'] = attributeValueCollection[attributeValue]['negativeCount'] + 1
-
-        zeroImpurity = self.getVarianceImpurity(attributeValueCollection['0']['negativeCount'],attributeValueCollection['0']['positiveCount'])
-        oneImpurity = self.getVarianceImpurity(attributeValueCollection['1']['negativeCount'],attributeValueCollection['1']['positiveCount'])
-        totalSamplesConsidered = len(instances)
-        zeroSamples = attributeValueCollection['0']['negativeCount'] + attributeValueCollection['0']['positiveCount']
-        oneSamples = attributeValueCollection['1']['negativeCount'] + attributeValueCollection['1']['positiveCount']
-
-        expectedImpurity = (zeroSamples/float(totalSamplesConsidered)) * zeroImpurity + (oneSamples/float(totalSamplesConsidered)) * oneImpurity 
-        gain = varianceImpurity - expectedImpurity
-        return gain
-
-    @classmethod
-    def getInstances(self, data, instanceType):
-        instances = []
-        for i in range(1,len(data)):
-            if data[i][-1] == instanceType: #class matches instanceType
-                instances.append(i)
-        return instances
-    
-    @classmethod
+        return -(pMinus) * math.log(pMinus,2) - (pPlus) * math.log(pPlus,2)
+         
     def getVarianceImpurity(self, k0, k1):
         k = k0 + k1
         if k == 0 or k1 == 0 or k0 == 0:
@@ -247,3 +124,49 @@ class ImpurityVarianceDecisionTree():
         pPlus = k1/float(k)
         impurity = pMinus * pPlus
         return impurity  
+
+    def getPrunedDecisionTree(self, l, k, data, attributes, currentAccuracy):
+        classifer = classifier.classifier()
+        d_best = copy.deepcopy(self)
+        bestAccuracy = currentAccuracy
+        for i in range(l):
+            d_prime = copy.deepcopy(d_best)
+            m = randint(1,k)
+            for j in range(1,m):
+                allNodesList = self.getAllNodes(d_prime.root)
+                n = len(allNodesList)
+                if n == 1 or n == 0:
+                    continue
+                else:
+                    p = randint(0,n - 1)
+                self.pruneSubTree(allNodesList[p])
+            
+            accuracy = classifer.classify(data,d_prime.root,attributes)
+            if accuracy > bestAccuracy:
+                d_best = d_prime
+                bestAccuracy = accuracy
+
+        return d_best
+
+    def getAllNodes(self, rootNode):
+        allNodesList = []
+        nodequeue = [rootNode]
+        while nodequeue:
+            node = nodequeue.pop(0)
+            if node is not None and node.isLeaf == False:
+                allNodesList.append(node)
+                nodequeue.append(node.leftChild)
+                nodequeue.append(node.rightChild)
+        return allNodesList
+
+    def pruneSubTree(self, randomNode):
+        randomNode.attribute = '0' if len(randomNode.negativeInstances) > len(randomNode.positiveInstances) else '1'
+        randomNode.isLeaf = True
+        randomNode.leftChild = None
+        randomNode.rightChild = None
+
+
+
+
+
+

@@ -13,6 +13,13 @@
                 "WaitOnAbnormalExit",
                 "WaitOnNormalExit",
                 "RedirectOutput"
+            ],
+            "args": [
+                "2" , "3",
+                "data_sets2/training_set.csv",
+                "data_sets2/validation_set.csv",
+                "data_sets2/test_set.csv", 
+                "no"
             ]
         },
         {

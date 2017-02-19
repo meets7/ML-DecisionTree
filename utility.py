@@ -6,6 +6,12 @@ def readCSV(fileName):
         dataAsList = map(tuple, datareader)
         return dataAsList
 
+def prettyPrintResults(accuracy, heuristic, optionalInfo = ""):
+
+    print "---Running classification on test set ---"
+    print "Using heuristic:" + heuristic +  " " + optionalInfo
+    print str(accuracy) + '%'
+    print "-----------------------------------------"
 
 # def main():
 #     print "utility file"

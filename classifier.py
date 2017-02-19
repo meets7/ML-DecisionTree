@@ -2,13 +2,13 @@ import dtree
 
 class classifier:
 
-	def classify(self, instanceData, decisionTree):
+	def classify(self, instanceData, rootNode, attributes):
 		
-		attributes = instanceData[0][:-1]
 		classification = ''
-		correctClassification = incorrectClassification = 0
+		correctClassificationCount = incorrectClassificationCount = 0
+
 		for instance in instanceData[1:]:
-			node = decisionTree.root
+			node = rootNode
 			while True:
 				if node.isLeaf:
 					classification = node.attribute
@@ -21,11 +21,11 @@ class classifier:
 						node = node.rightChild
 
 			if classification == instance[-1]:
-				correctClassification = correctClassification + 1
+				correctClassificationCount = correctClassificationCount + 1
 			else:
-				incorrectClassification = incorrectClassification + 1
+				incorrectClassificationCount = incorrectClassificationCount + 1
 
-		print str((correctClassification*100)/(correctClassification + incorrectClassification)) + '%'
+		return correctClassificationCount*100/float(correctClassificationCount + incorrectClassificationCount)
 
 
 
